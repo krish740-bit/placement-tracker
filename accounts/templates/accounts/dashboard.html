@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dashboard - Placement Tracker</title>
+
+</head>
+
+<body>
+
+    <h1>Welcome to Placement Tracker</h1>
+
+
+    <h2>Your Subjects</h2>
+
+    <a href="{% url 'revision' %}">
+        Revision
+    </a>
+
+    <a href="{% url 'goals' %}">
+        Goals
+    </a>
+
+
+    <form method="POST" action="{% url 'add_subject' %}">
+
+        {% csrf_token %}
+
+        <input type="text" name="name" placeholder="Enter subject name" required>
+
+        <button type="submit">
+            Add Subject
+        </button>
+
+    </form>
+
+
+    {% if subject_data %}
+
+    <ul>
+
+        {% for item in subject_data %}
+
+        <li>
+
+            <a href="{% url 'subject_detail' item.subject.id %}">
+                {{ item.subject.name }}
+            </a>
+
+            <p>
+                Progress:
+                {{ item.progress|floatformat:0 }}%
+            </p>
+
+        </li>
+
+        {% endfor %}
+
+    </ul>
+
+    {% else %}
+
+    <p>You haven't added any subjects yet.</p>
+
+    {% endif %}
+
+
+    <br>
+
+    <a href="{% url 'logout' %}">
+        Logout
+    </a>
+
+    {% include "accounts/ai_bar.html" %}
+
+
+</body>
+
+</html>

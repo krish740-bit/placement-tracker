@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Goals</title>
+
+</head>
+
+<body>
+
+    <h1>Goals</h1>
+
+    <a href="{% url 'add_goal' %}">
+        Add Goal
+    </a>
+
+    <hr>
+
+
+    {% if goal_data %}
+
+    {% for item in goal_data %}
+
+    <form method="POST" action="{% url 'delete_goal' item.goal.id %}">
+
+        {% csrf_token %}
+
+        <button type="submit">
+            Delete
+        </button>
+
+    </form>
+
+    <a href="{% url 'edit_goal' item.goal.id %}">
+        Edit
+    </a>
+
+    <div>
+
+        <h3>
+            {{ item.goal.title }}
+        </h3>
+
+
+        {% if item.goal.topic %}
+
+        <p>
+            {{ item.goal.topic.subject.name }}
+            →
+            {{ item.goal.topic.name }}
+        </p>
+
+        {% elif item.goal.subject %}
+
+        <p>
+            {{ item.goal.subject.name }}
+        </p>
+
+        {% else %}
+
+        <p>
+            General Goal
+        </p>
+
+        {% endif %}
+
+
+        <p>
+            Progress:
+            {{ item.completed }}
+            /
+            {{ item.target }}
+            —
+            {{ item.progress|floatformat:0 }}%
+        </p>
+
+
+        <div style="
+                    width: 300px;
+                    height: 10px;
+                    background: #ddd;
+                ">
+
+            <div style="
+                        width: {{ item.progress }}%;
+                        height: 10px;
+                        background: #777;
+                    ">
+            </div>
+
+        </div>
+
+    </div>
+
+    <hr>
+
+    {% endfor %}
+
+
+    {% else %}
+
+    <p>
+        No goals created yet.
+    </p>
+
+    {% endif %}
+
+
+    <br>
+
+    <a href="{% url 'dashboard' %}">
+        Back to Dashboard
+    </a>
+    
+    {% include "accounts/ai_bar.html" %}
+
+
+</body>
+
+</html>

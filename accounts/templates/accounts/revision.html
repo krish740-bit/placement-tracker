@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Revision - Placement Tracker</title>
+
+</head>
+
+<body>
+
+    <h1>Revision</h1>
+
+    <p>
+        Questions you have marked for revision.
+    </p>
+
+
+    {% if questions %}
+
+    <ul>
+
+        {% for question in questions %}
+
+        <li>
+
+            <h3>
+                {{ question.title }}
+            </h3>
+
+            <p>
+                {{ question.topic.subject.name }}
+                →
+                {{ question.topic.name }}
+            </p>
+
+
+            {% if question.link %}
+
+            <a href="{{ question.link }}" target="_blank">
+                Open Question
+            </a>
+
+            {% endif %}
+
+
+            <form method="POST" action="{% url 'toggle_question_revision' question.id %}">
+
+                {% csrf_token %}
+
+                <button type="submit">
+                    Remove from Revision
+                </button>
+
+            </form>
+
+        </li>
+
+        <br>
+
+        {% endfor %}
+
+    </ul>
+
+    {% else %}
+
+    <p>
+        You have no questions marked for revision.
+    </p>
+
+    {% endif %}
+
+
+    <br>
+
+    <a href="{% url 'dashboard' %}">
+        Back to Dashboard
+    </a>
+    
+    {% include "accounts/ai_bar.html" %}
+
+</body>
+
+</html>

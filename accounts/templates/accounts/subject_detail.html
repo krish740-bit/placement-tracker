@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>
+        {{ subject.name }} - Placement Tracker
+    </title>
+
+</head>
+
+<body>
+
+    <!-- Subject Header -->
+
+    <h1>{{ subject.name }}</h1>
+
+    <h2>Statistics</h2>
+
+    <p>
+        Total Questions:
+        {{ total_questions }}
+    </p>
+
+    <p>
+        Solved:
+        {{ solved_questions }}
+    </p>
+
+    <p>
+        For Revision:
+        {{ revision_questions }}
+    </p>
+
+    <p>
+        This is your {{ subject.name }} tracker.
+    </p>
+
+    <h2>Weak Areas</h2>
+
+    {% if weak_topics %}
+
+    {% for item in weak_topics %}
+
+    <div>
+        <strong>
+            {{ item.topic.name }}
+        </strong>
+
+        <span>
+            {{ item.progress|floatformat:0 }}%
+        </span>
+
+        <div style="
+                    width: 300px;
+                    height: 10px;
+                    background: #ddd;
+                ">
+
+            <div style="
+                        width: {{ item.progress }}%;
+                        height: 10px;
+                        background: #777;
+                    ">
+            </div>
+
+        </div>
+
+    </div>
+
+    <br>
+
+    {% endfor %}
+
+    {% else %}
+
+    <p>
+        No weak areas right now.
+    </p>
+
+    {% endif %}
+
+
+    <!-- Topics Section -->
+
+    <h2>Topics</h2>
+
+    <form method="POST" action="{% url 'add_topic' subject.id %}">
+
+        {% csrf_token %}
+
+        <input type="text" name="name" placeholder="Enter topic name" required>
+
+        <button type="submit">
+            Add Topic
+        </button>
+
+    </form>
+
+
+    {% if topic_data %}
+
+    <ul>
+
+        {% for item in topic_data %}
+
+        <li>
+
+            <a href="{% url 'topic_detail' item.topic.id %}">
+                {{ item.topic.name }}
+            </a>
+
+            <p>
+                {{ item.solved_questions }}
+                /
+                {{ item.total_questions }}
+                questions solved
+            </p>
+
+            <p>
+                Progress:
+                {{ item.progress|floatformat:0 }}%
+            </p>
+
+        </li>
+
+        {% endfor %}
+
+    </ul>
+
+    {% else %}
+
+    <p>
+        No topics added yet.
+    </p>
+
+    {% endif %}
+
+    <h2>Goals</h2>
+
+    {% if subject_goal_data %}
+
+    {% for item in subject_goal_data %}
+
+    <div>
+
+        <h3>
+            {{ item.goal.title }}
+        </h3>
+
+        <p>
+            {{ item.completed }}
+            /
+            {{ item.target }}
+            —
+            {{ item.progress|floatformat:0 }}%
+        </p>
+
+        <div style="
+                width: 300px;
+                height: 10px;
+                background: #ddd;
+            ">
+
+            <div style="
+                    width: {{ item.progress }}%;
+                    height: 10px;
+                    background: #777;
+                ">
+            </div>
+
+        </div>
+
+    </div>
+
+    <br>
+
+    {% endfor %}
+
+    {% else %}
+
+    <p>No goals for this subject.</p>
+
+    {% endif %}
+
+    <!-- Notes Section -->
+
+    <h2>Notes</h2>
+
+    <form method="POST" action="{% url 'add_note' subject.id %}">
+
+        {% csrf_token %}
+
+        <input type="text" name="title" placeholder="Note title" required>
+
+        <textarea name="content" placeholder="Write your note..." rows="6" required></textarea>
+
+        <select name="topic">
+
+            <option value="">
+                General Subject Note
+            </option>
+
+            {% for item in topic_data %}
+
+            <option value="{{ item.topic.id }}">
+                {{ item.topic.name }}
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+        <button type="submit">
+            Add Note
+        </button>
+
+    </form>
+
+
+    {% if notes %}
+
+    <ul>
+
+        {% for note in notes %}
+
+        <li>
+
+            <h3>
+                {{ note.title }}
+            </h3>
+
+
+            {% if note.topic %}
+
+            <p>
+                Topic:
+                {{ note.topic.name }}
+            </p>
+
+            {% else %}
+
+            <p>
+                General
+                {{ subject.name }}
+                note
+            </p>
+
+            {% endif %}
+
+
+            <p>
+                {{ note.content }}
+            </p>
+
+            <a href="{% url 'edit_note' note.id %}">
+                Edit
+            </a>
+
+            <form method="POST" action="{% url 'delete_note' note.id %}">
+
+                {% csrf_token %}
+
+                <button type="submit">
+                    Delete
+                </button>
+
+            </form>
+
+        </li>
+
+        {% endfor %}
+
+    </ul>
+
+    {% else %}
+
+    <p>
+        No notes added yet.
+    </p>
+
+    {% endif %}
+
+
+    <!-- Navigation -->
+
+    <br>
+
+    <a href="{% url 'dashboard' %}">
+        Back to Dashboard
+    </a>
+    
+    {% include "accounts/ai_bar.html" %}
+
+</body>
+
+</html>

@@ -1,0 +1,149 @@
+<div id="ai-bar">
+    <div id="ai-messages">
+        <div class="ai-message ai-bot">
+            Hi! I'm your Placement Tracker AI. Ask me about your progress, goals, revision, DSA, or anything in your
+            tracker.
+        </div>
+    </div>
+
+    <div id="ai-input-area">
+        {% csrf_token %}
+
+        <input type="text" id="ai-input" placeholder="Ask your Placement Tracker AI..." onkeydown="handleAIKey(event)">
+
+        <button onclick="sendAIMessage()">
+            Ask
+        </button>
+    </div>
+</div>
+
+<style>
+    #ai-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ddd;
+        padding: 12px;
+        z-index: 1000;
+    }
+
+    #ai-messages {
+        max-height: 180px;
+        overflow-y: auto;
+        margin-bottom: 8px;
+    }
+
+    .ai-message {
+        padding: 8px;
+        margin: 4px 0;
+    }
+
+    .ai-user {
+        text-align: right;
+    }
+
+    .ai-bot {
+        text-align: left;
+    }
+
+    #ai-input-area {
+        display: flex;
+        gap: 8px;
+    }
+
+    #ai-input {
+        flex: 1;
+        padding: 10px;
+    }
+
+    #ai-input-area button {
+        padding: 10px 18px;
+    }
+</style>
+
+<script>
+    function handleAIKey(event) {
+        if (event.key === "Enter") {
+            sendAIMessage();
+        }
+    }
+
+    function formatAIResponse(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+            .replace(/\n/g, "<br>");
+    }
+
+    async function sendAIMessage() {
+        const input = document.getElementById("ai-input");
+        const message = input.value.trim();
+
+        if (!message) {
+            return;
+        }
+
+        const messages = document.getElementById("ai-messages");
+
+        messages.innerHTML += `
+        <div class="ai-message ai-user">
+            ${message}
+        </div>
+    `;
+
+        input.value = "";
+
+        const csrfToken = document.querySelector(
+            '#ai-input-area input[name="csrfmiddlewaretoken"]'
+        ).value;
+
+        messages.innerHTML += `
+        <div class="ai-message ai-bot" id="ai-loading">
+            Thinking...
+        </div>
+    `;
+
+        try {
+            const response = await fetch("/ai/chat/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken
+                },
+                body: JSON.stringify({
+                    message: message
+                })
+            });
+
+            const data = await response.json();
+
+            document.getElementById("ai-loading").remove();
+
+            if (data.reply) {
+                messages.innerHTML += `
+                <div class="ai-message ai-bot">
+                    ${formatAIResponse(data.reply)}
+                </div>
+            `;
+            } else {
+                messages.innerHTML += `
+                <div class="ai-message ai-bot">
+                    Error: ${data.error}
+                </div>
+            `;
+            }
+
+            messages.scrollTop = messages.scrollHeight;
+
+        } catch (error) {
+            document.getElementById("ai-loading").remove();
+
+            messages.innerHTML += `
+            <div class="ai-message ai-bot">
+                Something went wrong while contacting the AI.
+            </div>
+        `;
+        }
+    }
+</script>

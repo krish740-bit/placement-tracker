@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Edit Note - Placement Tracker</title>
+
+</head>
+
+<body>
+
+    <h1>Edit Note</h1>
+
+    <form method="POST" action="{% url 'edit_note' note.id %}">
+
+        {% csrf_token %}
+
+        <input type="text" name="title" value="{{ note.title }}" required>
+
+        <br><br>
+
+        <textarea name="content" rows="8" required>{{ note.content }}</textarea>
+
+        <br><br>
+
+        <select name="topic">
+
+            <option value="">
+                General Subject Note
+            </option>
+
+            {% for topic in topics %}
+
+            <option value="{{ topic.id }}" {% if note.topic and note.topic.id == topic.id %} selected {% endif %}>
+                {{ topic.name }}
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+        <br><br>
+
+        <button type="submit">
+            Save Changes
+        </button>
+
+    </form>
+
+    <br>
+
+    <a href="{% url 'subject_detail' note.subject.id %}">
+        Cancel
+    </a>
+    
+    {% include "accounts/ai_bar.html" %}
+
+</body>
+
+</html>
