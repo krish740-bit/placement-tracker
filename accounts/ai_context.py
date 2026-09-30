@@ -10,54 +10,96 @@ def build_user_context(user):
     total_solved = 0
     total_revision = 0
 
+    # -------------------------
+    # OVERALL PROGRESS
+    # -------------------------
+
     for subject in subjects:
+
+        topics = Topic.objects.filter(subject=subject)
+
+        for topic in topics:
+
+            questions = Question.objects.filter(topic=topic)
+
+            total_questions += questions.count()
+            total_solved += questions.filter(solved=True).count()
+            total_revision += questions.filter(needs_revision=True).count()
+
+    context.append("=== OVERALL PROGRESS ===")
+
+    context.append(f"Total questions: {total_questions}")
+
+    context.append(f"Total solved: {total_solved}")
+
+    context.append(f"Total marked for revision: {total_revision}")
+
+    # -------------------------
+    # SUBJECTS & TOPICS
+    # -------------------------
+
+    context.append("\n=== SUBJECT / TOPIC PROGRESS ===")
+
+    for subject in subjects:
+
         context.append(f"\nSubject: {subject.name}")
 
         topics = Topic.objects.filter(subject=subject)
 
         for topic in topics:
+
             questions = Question.objects.filter(topic=topic)
 
             total = questions.count()
             solved = questions.filter(solved=True).count()
+
             revision = questions.filter(needs_revision=True).count()
 
-            total_questions += total
-            total_solved += solved
-            total_revision += revision
-
             context.append(
-                f"  Topic: {topic.name} | "
-                f"Questions: {total} | "
+                f"Topic: {topic.name} | "
+                f"Total: {total} | "
                 f"Solved: {solved} | "
-                f"Marked for Revision: {revision}"
+                f"Revision: {revision}"
             )
 
-    context.insert(
-        0,
-        f"""OVERALL PROGRESS:
-Total questions: {total_questions}
-Total solved: {total_solved}
-Questions marked for revision: {total_revision}
-""",
+    # -------------------------
+    # REVISION QUEUE
+    # -------------------------
+
+    context.append("\n=== REVISION QUEUE ===")
+
+    revision_questions = Question.objects.filter(
+        topic__subject__user=user, needs_revision=True
     )
 
-    notes = Note.objects.filter(user=user)
+    if revision_questions.exists():
 
-    if notes.exists():
-        context.append("\nNOTES:")
+        for question in revision_questions:
 
-        for note in notes:
-            context.append(f"  {note.title}: {note.content[:500]}")
+            context.append(
+                f"Question: {question.title} | "
+                f"Topic: {question.topic.name} | "
+                f"Solved: {question.solved}"
+            )
+
+    else:
+
+        context.append("No questions currently marked for revision.")
+
+    # -------------------------
+    # GOALS
+    # -------------------------
+
+    context.append("\n=== GOALS ===")
 
     goals = Goal.objects.filter(user=user)
 
     if goals.exists():
-        context.append("\nGOALS:")
 
         for goal in goals:
 
             if goal.topic:
+
                 questions = Question.objects.filter(
                     topic=goal.topic, topic__subject__user=user
                 )
@@ -65,6 +107,7 @@ Questions marked for revision: {total_revision}
                 scope = f"Topic: {goal.topic.name}"
 
             elif goal.subject:
+
                 questions = Question.objects.filter(
                     topic__subject=goal.subject, topic__subject__user=user
                 )
@@ -72,18 +115,44 @@ Questions marked for revision: {total_revision}
                 scope = f"Subject: {goal.subject.name}"
 
             else:
+
                 questions = Question.objects.filter(topic__subject__user=user)
 
                 scope = "All tracked subjects"
 
             completed = questions.filter(solved=True).count()
 
+            remaining = max(goal.target - completed, 0)
+
             context.append(
-                f"  Goal: {goal.title} | "
+                f"Goal: {goal.title} | "
                 f"Scope: {scope} | "
                 f"Completed: {completed} | "
-                f"Target: {goal.target}"
+                f"Target: {goal.target} | "
+                f"Remaining: {remaining}"
             )
+
+    else:
+
+        context.append("No goals created.")
+
+    # -------------------------
+    # NOTES
+    # -------------------------
+
+    context.append("\n=== NOTES ===")
+
+    notes = Note.objects.filter(user=user)
+
+    if notes.exists():
+
+        for note in notes:
+
+            context.append(f"{note.title}: " f"{note.content[:500]}")
+
+    else:
+
+        context.append("No notes available.")
 
     return "\n".join(context)
 
