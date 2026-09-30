@@ -76,6 +76,8 @@
 
 <script>
 
+    let aiConversation = [];
+
     function handleAIKey(event) {
 
         if (event.key === "Enter") {
@@ -124,6 +126,11 @@
         if (!message) {
             return;
         }
+
+        aiConversation.push({
+            role: "user",
+            content: message
+        });
 
 
         const messages = document.getElementById("ai-messages");
@@ -194,7 +201,8 @@
                 body: JSON.stringify({
                     message: message,
                     page: page,
-                    object_id: objectId
+                    object_id: objectId,
+                    conversation: aiConversation
                 })
 
             });
@@ -212,11 +220,18 @@
 
             if (data.reply) {
 
+                aiConversation.push({
+                    role: "assistant",
+                    content: data.reply
+                });
+
                 messages.innerHTML += `
-                <div class="ai-message ai-bot">
-                    ${formatAIResponse(data.reply)}
-                </div>
-            `;
+                    <div class="ai-message ai-bot">
+                        ${formatAIResponse(data.reply)}
+                    </div>
+                `;
+
+
 
             } else {
 
