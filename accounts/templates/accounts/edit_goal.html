@@ -21,7 +21,7 @@
 
         <br><br>
 
-        <select name="subject">
+        <select name="subject" id="subject">
 
             <option value="">
                 No Subject
@@ -29,7 +29,7 @@
 
             {% for subject in subjects %}
 
-            <option value="{{ subject.id }}" {% if goal.subject and goal.subject.id==subject.id %} selected {% endif %}>
+            <option value="{{ subject.id }}" {% if goal.subject and goal.subject.id == subject.id %} selected {% endif %}>
                 {{ subject.name }}
             </option>
 
@@ -39,7 +39,7 @@
 
         <br><br>
 
-        <select name="topic">
+        <select name="topic" id="topic">
 
             <option value="">
                 No Topic
@@ -47,7 +47,7 @@
 
             {% for topic in topics %}
 
-            <option value="{{ topic.id }}" {% if goal.topic and goal.topic.id==topic.id %} selected {% endif %}>
+            <option value="{{ topic.id }}" {% if goal.topic and goal.topic.id == topic.id %} selected {% endif %}>
                 {{ topic.name }}
             </option>
 
@@ -69,8 +69,52 @@
         Back to Goals
     </a>
 
-    {% include "accounts/ai_bar.html" %}
+    <script>
+        const subjectSelect = document.getElementById("subject");
+        const topicSelect = document.getElementById("topic");
+        const currentGoalSubjectId = "{{ goal.subject.id|default:'' }}";
+        const currentGoalTopicId = "{{ goal.topic.id|default:'' }}";
 
+        subjectSelect.addEventListener("change", function () {
+            const subjectId = this.value;
+
+            topicSelect.innerHTML = '<option value="">No Topic</option>';
+
+            if (!subjectId) {
+                return;
+            }
+
+            fetch(`/subjects/${subjectId}/topics/`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch topics");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    topicSelect.innerHTML = '<option value="">No Topic</option>';
+                    if (data.topics && data.topics.length > 0) {
+                        data.topics.forEach(topic => {
+                            const option = document.createElement("option");
+                            option.value = topic.id;
+                            option.textContent = topic.name;
+
+                            if (currentGoalSubjectId && String(currentGoalSubjectId) === String(subjectId) &&
+                                currentGoalTopicId && String(currentGoalTopicId) === String(topic.id)) {
+                                option.selected = true;
+                            }
+
+                            topicSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error("Error loading subject topics:", err);
+                });
+        });
+    </script>
+
+    {% include "accounts/ai_bar.html" %}
 
 </body>
 

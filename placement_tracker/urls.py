@@ -57,4 +57,5 @@ urlpatterns = [
     path("goals/delete/<int:goal_id>/", views.delete_goal, name="delete_goal"),
     path("goals/edit/<int:goal_id>/", views.edit_goal, name="edit_goal"),
     path("ai/chat/", views.ai_chat, name="ai_chat"),
+    path("ai/add-question/", views.ai_add_question, name="ai_add_question"),
 ]

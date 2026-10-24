@@ -52,6 +52,8 @@
 
                 {% csrf_token %}
 
+                <input type="hidden" name="next" value="{% url 'revision' %}">
+
                 <button type="submit">
                     Remove from Revision
                 </button>

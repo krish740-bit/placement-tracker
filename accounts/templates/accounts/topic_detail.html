@@ -166,6 +166,8 @@
 
                 {% csrf_token %}
 
+                <input type="hidden" name="next" value="{% url 'topic_detail' topic.id %}">
+
                 <button type="submit">
 
                     {% if question.needs_revision %}

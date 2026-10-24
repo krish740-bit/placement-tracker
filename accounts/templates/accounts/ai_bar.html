@@ -13,9 +13,9 @@
 
         {% csrf_token %}
 
-        <input type="text" id="ai-input" placeholder="Ask your Placement Tracker AI..." onkeydown="handleAIKey(event)">
+        <input type="text" id="ai-input" placeholder="Ask your Placement Tracker AI...">
 
-        <button onclick="sendAIMessage()">
+        <button id="ai-send-btn" type="button">
             Ask
         </button>
 
@@ -25,27 +25,39 @@
 
 
 <style>
+    body {
+        padding-bottom: 250px;
+    }
+
     #ai-bar {
         position: fixed;
         bottom: 0;
         left: 0;
         width: 100%;
+        box-sizing: border-box;
         background: white;
         border-top: 1px solid #ddd;
         padding: 10px;
         z-index: 9999;
+        max-height: 45vh;
+        display: flex;
+        flex-direction: column;
     }
 
     #ai-messages {
         max-height: 180px;
         overflow-y: auto;
         margin-bottom: 8px;
+        scroll-behavior: smooth;
+        flex: 1 1 auto;
+        min-height: 0;
     }
 
     .ai-message {
         padding: 8px 12px;
         margin: 5px 0;
         border-radius: 8px;
+        word-break: break-word;
     }
 
     .ai-user {
@@ -60,45 +72,135 @@
     #ai-input-area {
         display: flex;
         gap: 8px;
+        flex-shrink: 0;
     }
 
     #ai-input {
         flex: 1;
         padding: 10px;
+        box-sizing: border-box;
+        font-size: 14px;
     }
 
     #ai-input-area button {
         padding: 10px 18px;
         cursor: pointer;
     }
+
+    @media (max-width: 600px) {
+        body {
+            padding-bottom: 270px;
+        }
+
+        #ai-bar {
+            max-height: 50vh;
+            padding: 8px;
+        }
+
+        #ai-messages {
+            max-height: 140px;
+        }
+
+        #ai-input-area button {
+            padding: 10px 14px;
+        }
+    }
 </style>
 
 
 <script>
 
+    const AI_STORAGE_KEY =
+        "placementTrackerAIConversation_{{ request.user.id }}";
+    const AI_PENDING_ACTION_KEY =
+        "placementTrackerAIPendingAction_{{ request.user.id }}";
+
     let aiConversation = [];
 
-    function handleAIKey(event) {
+    try {
+        const savedConversation = sessionStorage.getItem(AI_STORAGE_KEY);
+        aiConversation = savedConversation
+            ? JSON.parse(savedConversation)
+            : [];
 
-        if (event.key === "Enter") {
-
-            event.preventDefault();
-
-            sendAIMessage();
-
+        if (!Array.isArray(aiConversation)) {
+            aiConversation = [];
         }
-
+    } catch (error) {
+        aiConversation = [];
     }
 
+    function saveAIConversation() {
+        try {
+            sessionStorage.setItem(
+                AI_STORAGE_KEY,
+                JSON.stringify(aiConversation.slice(-30))
+            );
+        } catch (error) {
+            console.warn("Could not save AI conversation.");
+        }
+    }
+
+    function savePendingAction(actionData) {
+        try {
+            sessionStorage.setItem(AI_PENDING_ACTION_KEY, JSON.stringify(actionData));
+        } catch (e) {
+            console.warn("Could not save pending action.");
+        }
+    }
+
+    function getPendingAction() {
+        try {
+            const saved = sessionStorage.getItem(AI_PENDING_ACTION_KEY);
+            if (!saved) return null;
+            const parsed = JSON.parse(saved);
+            if (parsed && typeof parsed === "object" && parsed.status === "pending") {
+                return parsed;
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function clearPendingAction() {
+        try {
+            sessionStorage.removeItem(AI_PENDING_ACTION_KEY);
+        } catch (e) {
+            console.warn("Could not clear pending action.");
+        }
+    }
+
+    function clearCurrentUserData() {
+        try {
+            sessionStorage.removeItem(AI_STORAGE_KEY);
+            sessionStorage.removeItem(AI_PENDING_ACTION_KEY);
+        } catch (e) {
+            console.warn("Could not clear AI session storage.");
+        }
+    }
+
+    function isSafeUrl(urlStr) {
+        if (!urlStr || typeof urlStr !== "string") return false;
+        const trimmed = urlStr.trim();
+        try {
+            const parsed = new URL(trimmed, window.location.origin);
+            return parsed.protocol === "http:" || parsed.protocol === "https:";
+        } catch (e) {
+            return false;
+        }
+    }
 
     function formatAIResponse(text) {
+        if (!text || typeof text !== "string") return "";
 
         return text
-
             // Escape HTML first
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
 
             // Headings
             .replace(/^### (.*)$/gm, "<strong>$1</strong>")
@@ -116,154 +218,421 @@
             .replace(/\n/g, "<br>");
     }
 
+    function appendUserMessage(text) {
+        const messages = document.getElementById("ai-messages");
+        if (!messages) return;
+        const div = document.createElement("div");
+        div.className = "ai-message ai-user";
+        div.textContent = text;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function appendBotMessage(formattedHtmlOrText, isRawText) {
+        const messages = document.getElementById("ai-messages");
+        if (!messages) return null;
+        const div = document.createElement("div");
+        div.className = "ai-message ai-bot";
+        if (isRawText) {
+            div.textContent = formattedHtmlOrText;
+        } else {
+            div.innerHTML = formattedHtmlOrText;
+        }
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+        return div;
+    }
+
+    function appendStatusMessage(text, isError) {
+        const messages = document.getElementById("ai-messages");
+        if (!messages) return;
+        const div = document.createElement("div");
+        div.className = "ai-message ai-bot";
+        div.textContent = (isError ? "❌ " : "✅ ") + text;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    let isActionSubmitting = false;
+
+    async function executeAddQuestion(actionData, addBtn, cancelBtn, cardElement) {
+        if (isActionSubmitting) return;
+        isActionSubmitting = true;
+
+        if (addBtn) {
+            addBtn.disabled = true;
+            addBtn.textContent = "Adding...";
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = true;
+        }
+
+        const csrfInput = document.querySelector(
+            '#ai-input-area input[name="csrfmiddlewaretoken"]'
+        );
+        const csrfToken = csrfInput ? csrfInput.value : "";
+
+        try {
+            const response = await fetch("/ai/add-question/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken
+                },
+                body: JSON.stringify({
+                    topic_id: actionData.topic_id || null,
+                    topic: actionData.topic || "",
+                    title: actionData.title || "",
+                    link: actionData.link || ""
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                clearPendingAction();
+                if (cardElement) {
+                    cardElement.remove();
+                }
+
+                const successText = "Added '" + actionData.title + "' to " + (data.topic_name || actionData.topic) + ".";
+                appendStatusMessage(successText, false);
+
+                aiConversation.push({
+                    role: "assistant",
+                    content: "✅ " + successText
+                });
+                saveAIConversation();
+
+                setTimeout(function () {
+                    window.location.reload();
+                }, 600);
+            } else {
+                isActionSubmitting = false;
+                if (addBtn) {
+                    addBtn.disabled = false;
+                    addBtn.textContent = "Add Question";
+                }
+                if (cancelBtn) {
+                    cancelBtn.disabled = false;
+                }
+                const errorText = (data && data.error) ? data.error : "Failed to add question.";
+                appendStatusMessage(errorText, true);
+            }
+        } catch (err) {
+            isActionSubmitting = false;
+            if (addBtn) {
+                addBtn.disabled = false;
+                addBtn.textContent = "Add Question";
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+            }
+            appendStatusMessage("Something went wrong while contacting the server.", true);
+        }
+    }
+
+    function createActionCard(actionData) {
+        const card = document.createElement("div");
+        card.className = "ai-action-card";
+        card.style.marginTop = "10px";
+        card.style.padding = "10px";
+        card.style.border = "1px solid #ccc";
+        card.style.borderRadius = "8px";
+        card.style.backgroundColor = "#fff";
+
+        const header = document.createElement("strong");
+        header.textContent = "Add this question?";
+        card.appendChild(header);
+
+        card.appendChild(document.createElement("br"));
+        card.appendChild(document.createElement("br"));
+
+        // Question title
+        const qLabel = document.createElement("strong");
+        qLabel.textContent = "Question: ";
+        card.appendChild(qLabel);
+        const qSpan = document.createElement("span");
+        qSpan.textContent = actionData.title || "";
+        card.appendChild(qSpan);
+
+        card.appendChild(document.createElement("br"));
+
+        // Topic name
+        const tLabel = document.createElement("strong");
+        tLabel.textContent = "Topic: ";
+        card.appendChild(tLabel);
+        const tSpan = document.createElement("span");
+        tSpan.textContent = actionData.topic || "";
+        card.appendChild(tSpan);
+
+        // Link (if present)
+        if (actionData.link && actionData.link.trim()) {
+            card.appendChild(document.createElement("br"));
+            const lLabel = document.createElement("strong");
+            lLabel.textContent = "Link: ";
+            card.appendChild(lLabel);
+            const trimmed = actionData.link.trim();
+            if (isSafeUrl(trimmed)) {
+                const linkA = document.createElement("a");
+                linkA.href = trimmed;
+                linkA.target = "_blank";
+                linkA.rel = "noopener noreferrer";
+                linkA.textContent = trimmed;
+                card.appendChild(linkA);
+            } else {
+                const plainSpan = document.createElement("span");
+                plainSpan.textContent = trimmed;
+                card.appendChild(plainSpan);
+            }
+        }
+
+        card.appendChild(document.createElement("br"));
+        card.appendChild(document.createElement("br"));
+
+        // Buttons
+        const btnBox = document.createElement("div");
+        btnBox.style.display = "flex";
+        btnBox.style.gap = "8px";
+
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.textContent = "Add Question";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.textContent = "Cancel";
+
+        addBtn.addEventListener("click", function () {
+            executeAddQuestion(actionData, addBtn, cancelBtn, card);
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            clearPendingAction();
+            card.remove();
+        });
+
+        btnBox.appendChild(addBtn);
+        btnBox.appendChild(cancelBtn);
+        card.appendChild(btnBox);
+
+        return card;
+    }
+
+    function restoreAIConversation() {
+        const messages = document.getElementById("ai-messages");
+        if (!messages) return;
+
+        messages.innerHTML = "";
+
+        if (aiConversation.length === 0) {
+            const greeting = document.createElement("div");
+            greeting.className = "ai-message ai-bot";
+            greeting.textContent =
+                "Hi! I'm your Placement Tracker AI. Ask me about your progress, goals, revision, DSA, or anything in your tracker.";
+            messages.appendChild(greeting);
+        } else {
+            aiConversation.forEach(function (item) {
+                let content = item.content || "";
+
+                // Don't display internal AI action instructions in history
+                content = content.replace(
+                    /\[ACTION:add_question\][\s\S]*?\[\/ACTION\]/g,
+                    ""
+                ).trim();
+
+                if (!content) return;
+
+                const element = document.createElement("div");
+                element.className =
+                    "ai-message " +
+                    (item.role === "user" ? "ai-user" : "ai-bot");
+
+                if (item.role === "user") {
+                    element.textContent = content;
+                } else {
+                    element.innerHTML = formatAIResponse(content);
+                }
+
+                messages.appendChild(element);
+            });
+        }
+
+        // Restore pending action card if one is active
+        const pendingAction = getPendingAction();
+        if (pendingAction) {
+            const card = createActionCard(pendingAction);
+            messages.appendChild(card);
+        }
+
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    restoreAIConversation();
+
+    const aiInput = document.getElementById("ai-input");
+    if (aiInput) {
+        aiInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendAIMessage();
+            }
+        });
+    }
+
+    const aiSendBtn = document.getElementById("ai-send-btn");
+    if (aiSendBtn) {
+        aiSendBtn.addEventListener("click", sendAIMessage);
+    }
+
+    // Attach to any logout forms on the page to clean up user data
+    document.querySelectorAll('form[action*="logout"]').forEach(function (form) {
+        form.addEventListener("submit", clearCurrentUserData);
+    });
 
     async function sendAIMessage() {
-
         const input = document.getElementById("ai-input");
+        if (!input) return;
 
         const message = input.value.trim();
-
-        if (!message) {
-            return;
-        }
+        if (!message) return;
 
         aiConversation.push({
             role: "user",
             content: message
         });
+        saveAIConversation();
 
-
-        const messages = document.getElementById("ai-messages");
-
-
-        messages.innerHTML += `
-        <div class="ai-message ai-user">
-            ${message}
-        </div>
-    `;
-
-
+        appendUserMessage(message);
         input.value = "";
 
-
-        const csrfToken = document.querySelector(
+        const csrfInput = document.querySelector(
             '#ai-input-area input[name="csrfmiddlewaretoken"]'
-        ).value;
+        );
+        const csrfToken = csrfInput ? csrfInput.value : "";
 
-
-        messages.innerHTML += `
-        <div class="ai-message ai-bot" id="ai-loading">
-            Thinking...
-        </div>
-    `;
-
+        const messages = document.getElementById("ai-messages");
+        const loadingDiv = document.createElement("div");
+        loadingDiv.className = "ai-message ai-bot";
+        loadingDiv.id = "ai-loading";
+        loadingDiv.textContent = "Thinking...";
+        messages.appendChild(loadingDiv);
+        messages.scrollTop = messages.scrollHeight;
 
         let page = "general";
         let objectId = null;
-
+        let currentTopicName = null;
 
         {% if subject %}
-
         page = "subject";
         objectId = "{{ subject.id }}";
-
         {% elif topic %}
-
         page = "topic";
         objectId = "{{ topic.id }}";
-
+        currentTopicName = "{{ topic.name|escapejs }}";
         {% elif request.resolver_match.url_name == "revision" %}
-
         page = "revision";
-
         {% elif request.resolver_match.url_name == "goals" %}
-
         page = "goals";
-
         {% elif request.resolver_match.url_name == "dashboard" %}
-
         page = "dashboard";
-
         {% endif %}
 
-
         try {
-
             const response = await fetch("/ai/chat/", {
-
                 method: "POST",
-
                 headers: {
                     "Content-Type": "application/json",
                     "X-CSRFToken": csrfToken
                 },
-
                 body: JSON.stringify({
                     message: message,
                     page: page,
                     object_id: objectId,
                     conversation: aiConversation
                 })
-
             });
-
 
             const data = await response.json();
 
-
             const loading = document.getElementById("ai-loading");
-
             if (loading) {
                 loading.remove();
             }
 
+            if (response.ok && data.reply) {
+                const actionMatch = data.reply.match(
+                    /\[ACTION:add_question\]([\s\S]*?)\[\/ACTION\]/
+                );
 
-            if (data.reply) {
+                if (actionMatch) {
+                    const actionText = actionMatch[1];
+                    const topicMatch = actionText.match(/Topic:\s*(.*)/i);
+                    const titleMatch = actionText.match(/Title:\s*(.*)/i);
+                    const linkMatch = actionText.match(/Link:\s*(.*)/i);
 
-                aiConversation.push({
-                    role: "assistant",
-                    content: data.reply
-                });
+                    const parsedTopic = topicMatch ? topicMatch[1].trim() : "";
+                    const parsedTitle = titleMatch ? titleMatch[1].trim() : "";
+                    const parsedLink = linkMatch ? linkMatch[1].trim() : "";
 
-                messages.innerHTML += `
-                    <div class="ai-message ai-bot">
-                        ${formatAIResponse(data.reply)}
-                    </div>
-                `;
+                    const cleanReply = data.reply
+                        .replace(
+                            /\[ACTION:add_question\][\s\S]*?\[\/ACTION\]/,
+                            ""
+                        )
+                        .trim();
 
+                    if (cleanReply) {
+                        aiConversation.push({
+                            role: "assistant",
+                            content: cleanReply
+                        });
+                        saveAIConversation();
+                        appendBotMessage(formatAIResponse(cleanReply));
+                    }
 
+                    let resolvedTopicId = null;
+                    if (currentTopicName && parsedTopic && currentTopicName.toLowerCase() === parsedTopic.toLowerCase()) {
+                        resolvedTopicId = objectId;
+                    }
+
+                    const pendingAction = {
+                        type: "add_question",
+                        topic: parsedTopic,
+                        topic_id: resolvedTopicId,
+                        title: parsedTitle,
+                        link: parsedLink,
+                        status: "pending",
+                        createdAt: Date.now()
+                    };
+
+                    savePendingAction(pendingAction);
+
+                    const card = createActionCard(pendingAction);
+                    messages.appendChild(card);
+                    messages.scrollTop = messages.scrollHeight;
+
+                } else {
+                    aiConversation.push({
+                        role: "assistant",
+                        content: data.reply
+                    });
+                    saveAIConversation();
+                    appendBotMessage(formatAIResponse(data.reply));
+                }
 
             } else {
-
-                messages.innerHTML += `
-                <div class="ai-message ai-bot">
-                    Error: ${data.error}
-                </div>
-            `;
-
+                const errorText = (data && data.error) ? data.error : "Failed to get a response from AI.";
+                appendStatusMessage(errorText, true);
             }
 
-
-            messages.scrollTop = messages.scrollHeight;
-
-
         } catch (error) {
-
             const loading = document.getElementById("ai-loading");
-
             if (loading) {
                 loading.remove();
             }
-
-
-            messages.innerHTML += `
-            <div class="ai-message ai-bot">
-                Something went wrong while contacting the AI.
-            </div>
-        `;
-
+            appendStatusMessage("Something went wrong while contacting the AI.", true);
         }
-
     }
 
 </script>
